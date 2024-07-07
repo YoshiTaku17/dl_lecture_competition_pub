@@ -21,6 +21,8 @@ def run(args: DictConfig):
     
     if args.use_wandb:
         wandb.init(mode="online", dir=logdir, project="MEG-classification")
+    # デバイスの設定
+    device = torch.device("cpu")
 
     # ------------------
     #    Dataloader
