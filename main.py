@@ -47,6 +47,8 @@ def run(args: DictConfig):
     #     Optimizer
     # ------------------
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    #optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
+    #scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
 
     # ------------------
     #   Start training
