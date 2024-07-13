@@ -1,3 +1,4 @@
+# main.py
 import os, sys
 import numpy as np
 import torch
@@ -49,13 +50,10 @@ def run(args: DictConfig):
     logdir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
     
     if args.use_wandb:
-        wandb.init(mode="online", dir=logdir, project="MEG-classification")
-    # デバイスの設定
-    #device = torch.device("cpu")
+        wandb.init(mode="online", dir=logdir, project="MEG-classification", config={
+            "dropout_rate": 0.5
+        })
 
-    # ------------------
-    #    Dataloader
-    # ------------------
     loader_args = {"batch_size": args.batch_size, "num_workers": args.num_workers}
     
     train_set = ThingsMEGDataset("train", args.data_dir)
@@ -67,23 +65,15 @@ def run(args: DictConfig):
         test_set, shuffle=False, batch_size=args.batch_size, num_workers=args.num_workers
     )
 
-    # ------------------
-    #       Model
-    # ------------------
     model = BasicConvClassifier(
-        train_set.num_classes, train_set.seq_len, train_set.num_channels
+        train_set.num_classes, train_set.seq_len, train_set.num_channels, dropout_rate=0.5
     ).to(args.device)
 
-    # ------------------
-    #     Optimizer
-    # ------------------
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-    #optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
-    #scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
 
-    # ------------------
-    #   Start training
-    # ------------------  
+    early_stopping = EarlyStopping(patience=10, delta=0.01)  # Early Stoppingの初期化
+
     max_val_acc = 0
     accuracy = Accuracy(
         task="multiclass", num_classes=train_set.num_classes, top_k=10
@@ -123,14 +113,13 @@ def run(args: DictConfig):
         print(f"Epoch {epoch+1}/{args.epochs} | train loss: {np.mean(train_loss):.3f} | train acc: {np.mean(train_acc):.3f} | val loss: {np.mean(val_loss):.3f} | val acc: {np.mean(val_acc):.3f}")
         torch.save(model.state_dict(), os.path.join(logdir, "model_last.pt"))
         if args.use_wandb:
-            #wandb.log({"train_loss": np.mean(train_loss), "train_acc": np.mean(train_acc), "val_loss": np.mean(val_loss), "val_acc": np.mean(val_acc)}), "top_10_accuracy": np.mean(val_acc)})
             wandb.log({"train_loss": np.mean(train_loss), "train_acc": np.mean(train_acc), "val_loss": np.mean(val_loss), "val_acc": np.mean(val_acc), "top_10_accuracy": np.mean(val_acc)})
 
         if np.mean(val_acc) > max_val_acc:
             cprint("New best.", "cyan")
             torch.save(model.state_dict(), os.path.join(logdir, "model_best.pt"))
             max_val_acc = np.mean(val_acc)
-            
+
         scheduler.step()
 
         # Early Stoppingのチェック
@@ -138,12 +127,10 @@ def run(args: DictConfig):
         if early_stopping.early_stop:
             print("Early stopping")
             break
-    
-    # ----------------------------------
-    #  Start evaluation with best model
-    # ----------------------------------
+
+    # 最後にEarly Stoppingで保存された最良のモデルを読み込む
     model.load_state_dict(torch.load(os.path.join(logdir, "checkpoint.pt"), map_location=args.device))
-                                                            #"model_best.pt"
+
     preds = [] 
     model.eval()
     for X, subject_idxs in tqdm(test_loader, desc="Validation"):        
@@ -152,7 +139,6 @@ def run(args: DictConfig):
     preds = torch.cat(preds, dim=0).numpy()
     np.save(os.path.join(logdir, "submission"), preds)
     cprint(f"Submission {preds.shape} saved at {logdir}", "cyan")
-
 
 if __name__ == "__main__":
     run()
