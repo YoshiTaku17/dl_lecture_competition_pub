@@ -1,6 +1,6 @@
 batch_size: 128
-#epochs: 80
-epochs: 30
+epochs: 80
+
 lr: 0.001
 
 device: cuda:0
@@ -12,3 +12,9 @@ data_dir: data
 
 # Evaluation
 model_path: 
+
+# New additions
+dropout_rate: 0.5
+scheduler_step_size: 10
+scheduler_gamma: 0.1
+early_stopping_patience: 10
