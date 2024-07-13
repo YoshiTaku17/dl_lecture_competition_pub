@@ -13,6 +13,35 @@ from src.datasets import ThingsMEGDataset
 from src.models import BasicConvClassifier
 from src.utils import set_seed
 
+class EarlyStopping:
+    def __init__(self, patience=5, delta=0):
+        self.patience = patience
+        self.delta = delta
+        self.best_score = None
+        self.early_stop = False
+        self.counter = 0
+        self.best_loss = None
+
+    def __call__(self, val_loss, model, logdir):
+        score = -val_loss
+
+        if self.best_score is None:
+            self.best_score = score
+            self.save_checkpoint(val_loss, model, logdir)
+        elif score < self.best_score + self.delta:
+            self.counter += 1
+            print(f'EarlyStopping counter: {self.counter} out of {self.patience}')
+            if self.counter >= self.patience:
+                self.early_stop = True
+        else:
+            self.best_score = score
+            self.save_checkpoint(val_loss, model, logdir)
+            self.counter = 0
+
+    def save_checkpoint(self, val_loss, model, logdir):
+        '''Saves model when validation loss decrease.'''
+        self.best_loss = val_loss
+        torch.save(model.state_dict(), os.path.join(logdir, "checkpoint.pt"))
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
 def run(args: DictConfig):
@@ -101,12 +130,20 @@ def run(args: DictConfig):
             cprint("New best.", "cyan")
             torch.save(model.state_dict(), os.path.join(logdir, "model_best.pt"))
             max_val_acc = np.mean(val_acc)
+            
+        scheduler.step()
+
+        # Early Stoppingのチェック
+        early_stopping(np.mean(val_loss), model, logdir)
+        if early_stopping.early_stop:
+            print("Early stopping")
+            break
     
     # ----------------------------------
     #  Start evaluation with best model
     # ----------------------------------
-    model.load_state_dict(torch.load(os.path.join(logdir, "model_best.pt"), map_location=args.device))
-
+    model.load_state_dict(torch.load(os.path.join(logdir, "checkpoint.pt"), map_location=args.device))
+                                                            #"model_best.pt"
     preds = [] 
     model.eval()
     for X, subject_idxs in tqdm(test_loader, desc="Validation"):        
