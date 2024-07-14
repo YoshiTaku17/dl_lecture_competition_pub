@@ -10,7 +10,7 @@ class BasicConvClassifier(nn.Module):
         seq_len: int,
         in_channels: int,
         hid_dim: int = 128,
-        dropout_rate: float = 0.7  # dropout_rateを追加
+        dropout_rate: float = 0.5  # dropout_rateを追加
     ) -> None:
         super().__init__()
 
