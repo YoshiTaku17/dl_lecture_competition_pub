@@ -49,7 +49,7 @@ def run(args: DictConfig):
     #       Model
     # ------------------
     model = BasicConvClassifier(
-        train_set.num_classes, train_set.seq_len, train_set.num_channels, dropout_rate=0.5
+        train_set.num_classes, train_set.seq_len, train_set.num_channels, dropout_rate=0.7
     ).to(device)
 
     # ------------------
