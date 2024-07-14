@@ -25,6 +25,12 @@ def run(args: DictConfig):
     # デバイスの設定をCPUに変更
     device = torch.device("cpu")
 
+    # データ拡張の設定
+    def augment_data(X):
+        # ノイズの追加
+        noise = torch.randn_like(X) * 0.1
+        return X + noise
+    
     # ------------------
     #    Dataloader
     # ------------------
@@ -49,7 +55,8 @@ def run(args: DictConfig):
     # ------------------
     #     Optimizer
     # ------------------
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-4)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
 
     # ------------------
     #   Start training
@@ -67,6 +74,9 @@ def run(args: DictConfig):
         model.train()
         for X, y, subject_idxs in tqdm(train_loader, desc="Train"):
             X, y = X.to(device), y.to(device)
+
+            # データ拡張を適用
+            X = augment_data(X)
 
             y_pred = model(X)
             
@@ -99,6 +109,8 @@ def run(args: DictConfig):
             cprint("New best.", "cyan")
             torch.save(model.state_dict(), os.path.join(logdir, "model_best.pt"))
             max_val_acc = np.mean(val_acc)
+        
+        scheduler.step()
     
     # ----------------------------------
     #  Start evaluation with best model
