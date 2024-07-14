@@ -1,6 +1,6 @@
-batch_size: 256
+batch_size: 128
 #batch_size: 128
-epochs: 20
+epochs: 80
 #epochs: 80
 #xlr: 0.0001
 lr: 0.001
@@ -16,7 +16,7 @@ data_dir: data
 model_path: 
 
 # New additions
-dropout_rate: 0.7
+dropout_rate: 0.5
 #scheduler_step_size: 10
 #scheduler_gamma: 0.1
 #early_stopping_patience: 10
