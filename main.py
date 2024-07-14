@@ -1,4 +1,3 @@
-# main.py
 import os, sys
 import numpy as np
 import torch
@@ -14,46 +13,14 @@ from src.datasets import ThingsMEGDataset
 from src.models import BasicConvClassifier
 from src.utils import set_seed
 
-class EarlyStopping:
-    def __init__(self, patience=5, delta=0):
-        self.patience = patience
-        self.delta = delta
-        self.best_score = None
-        self.early_stop = False
-        self.counter = 0
-        self.best_loss = None
-
-    def __call__(self, val_loss, model, logdir):
-        score = -val_loss
-
-        if self.best_score is None:
-            self.best_score = score
-            self.save_checkpoint(val_loss, model, logdir)
-        elif score < self.best_score + self.delta:
-            self.counter += 1
-            print(f'EarlyStopping counter: {self.counter} out of {self.patience}')
-            if self.counter >= self.patience:
-                self.early_stop = True
-        else:
-            self.best_score = score
-            self.save_checkpoint(val_loss, model, logdir)
-            self.counter = 0
-
-    def save_checkpoint(self, val_loss, model, logdir):
-        '''Saves model when validation loss decrease.'''
-        self.best_loss = val_loss
-        torch.save(model.state_dict(), os.path.join(logdir, "checkpoint.pt"))
-
 @hydra.main(version_base=None, config_path="configs", config_name="config")
 def run(args: DictConfig):
     set_seed(args.seed)
     logdir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
     
     if args.use_wandb:
-        wandb.init(mode="online", dir=logdir, project="MEG-classification", config={
-            "dropout_rate": 0.5
-        })
-
+        wandb.init(mode="online", dir=logdir, project="MEG-classification")
+    
     loader_args = {"batch_size": args.batch_size, "num_workers": args.num_workers}
     
     train_set = ThingsMEGDataset("train", args.data_dir)
@@ -69,10 +36,7 @@ def run(args: DictConfig):
         train_set.num_classes, train_set.seq_len, train_set.num_channels, dropout_rate=0.5
     ).to(args.device)
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
-
-    early_stopping = EarlyStopping(patience=10, delta=0.01)  # Early Stoppingの初期化
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     max_val_acc = 0
     accuracy = Accuracy(
@@ -119,17 +83,8 @@ def run(args: DictConfig):
             cprint("New best.", "cyan")
             torch.save(model.state_dict(), os.path.join(logdir, "model_best.pt"))
             max_val_acc = np.mean(val_acc)
-
-        scheduler.step()
-
-        # Early Stoppingのチェック
-        early_stopping(np.mean(val_loss), model, logdir)
-        if early_stopping.early_stop:
-            print("Early stopping")
-            break
-
-    # 最後にEarly Stoppingで保存された最良のモデルを読み込む
-    model.load_state_dict(torch.load(os.path.join(logdir, "checkpoint.pt"), map_location=args.device))
+    
+    model.load_state_dict(torch.load(os.path.join(logdir, "model_best.pt"), map_location=args.device))
 
     preds = [] 
     model.eval()
