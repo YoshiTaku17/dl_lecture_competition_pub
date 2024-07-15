@@ -10,7 +10,7 @@ class BasicConvClassifier(nn.Module):
         seq_len: int,
         in_channels: int,
         hid_dim: int = 128,
-        dropout_rate: float = 0.5  # dropout_rateを追加
+        dropout_rate: float = 0.5
     ) -> None:
         super().__init__()
 
@@ -23,30 +23,29 @@ class BasicConvClassifier(nn.Module):
             nn.AdaptiveAvgPool1d(1),
             Rearrange("b d 1 -> b d"),
             nn.Linear(hid_dim, num_classes),
-            nn.Dropout(dropout_rate)  # 出力層にドロップアウトを追加
         )
 
     def forward(self, X: torch.Tensor) -> torch.Tensor:
         X = self.blocks(X)
         return self.head(X)
 
+
 class ConvBlock(nn.Module):
     def __init__(
         self,
         in_dim,
         out_dim,
-        dropout_rate: float,  # dropout_rateを追加
         kernel_size: int = 3,
-        p_drop: float = 0.1,
+        p_drop: float = 0.5,
     ) -> None:
         super().__init__()
-
+        
         self.in_dim = in_dim
         self.out_dim = out_dim
 
         self.conv0 = nn.Conv1d(in_dim, out_dim, kernel_size, padding="same")
         self.conv1 = nn.Conv1d(out_dim, out_dim, kernel_size, padding="same")
-
+        
         self.batchnorm0 = nn.BatchNorm1d(num_features=out_dim)
         self.batchnorm1 = nn.BatchNorm1d(num_features=out_dim)
 
