@@ -51,15 +51,6 @@ def run(args: DictConfig):
     
     # デバイスの設定をCPUに変更
     device = torch.device("cpu")
-
-    # データ拡張の設定
-    def augment_data(X):
-        # ノイズの追加
-        noise = torch.randn_like(X) * 0.1
-        # 時間的なシフト
-        shift = np.random.randint(-10, 10)
-        X = torch.roll(X, shifts=shift, dims=-1)
-        return X + noise
     
     # ------------------
     #    Dataloader
@@ -79,7 +70,7 @@ def run(args: DictConfig):
     #       Model
     # ------------------
     model = BasicConvClassifier(
-        train_set.num_classes, train_set.seq_len, train_set.num_channels, dropout_rate=0.5
+        train_set.num_classes, train_set.seq_len, train_set.num_channels, dropout_rate=args.dropout_rate
     ).to(device)
 
     # ------------------
@@ -106,9 +97,6 @@ def run(args: DictConfig):
         model.train()
         for X, y, subject_idxs in tqdm(train_loader, desc="Train"):
             X, y = X.to(device), y.to(device)
-
-            # データ拡張を適用
-            X = augment_data(X)
 
             y_pred = model(X)
             
