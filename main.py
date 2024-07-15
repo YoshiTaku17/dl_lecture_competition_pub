@@ -13,6 +13,33 @@ from src.datasets import ThingsMEGDataset
 from src.models import BasicConvClassifier
 from src.utils import set_seed
 
+class EarlyStopping:
+    def __init__(self, patience=10, delta=0.01):
+        self.patience = patience
+        self.delta = delta
+        self.best_score = None
+        self.early_stop = False
+        self.counter = 0
+        self.best_loss = None
+
+    def __call__(self, val_loss, model, logdir):
+        score = -val_loss
+
+        if self.best_score is None:
+            self.best_score = score
+            self.save_checkpoint(val_loss, model, logdir)
+        elif score < self.best_score + self.delta:
+            self.counter += 1
+            if self.counter >= self.patience:
+                self.early_stop = True
+        else:
+            self.best_score = score
+            self.save_checkpoint(val_loss, model, logdir)
+            self.counter = 0
+
+    def save_checkpoint(self, val_loss, model, logdir):
+        self.best_loss = val_loss
+        torch.save(model.state_dict(), os.path.join(logdir, "checkpoint.pt"))
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
 def run(args: DictConfig):
@@ -29,6 +56,9 @@ def run(args: DictConfig):
     def augment_data(X):
         # ノイズの追加
         noise = torch.randn_like(X) * 0.1
+        # 時間的なシフト
+        shift = np.random.randint(-10, 10)
+        X = torch.roll(X, shifts=shift, dims=-1)
         return X + noise
     
     # ------------------
@@ -57,6 +87,8 @@ def run(args: DictConfig):
     # ------------------
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
+
+    early_stopping = EarlyStopping(patience=10, delta=0.01)
 
     # ------------------
     #   Start training
@@ -111,11 +143,16 @@ def run(args: DictConfig):
             max_val_acc = np.mean(val_acc)
         
         scheduler.step()
+
+        early_stopping(np.mean(val_loss), model, logdir)
+        if early_stopping.early_stop:
+            print("Early stopping")
+            break
     
     # ----------------------------------
     #  Start evaluation with best model
     # ----------------------------------
-    model.load_state_dict(torch.load(os.path.join(logdir, "model_best.pt"), map_location=device))
+    model.load_state_dict(torch.load(os.path.join(logdir, "checkpoint.pt"), map_location=device))
 
     preds = [] 
     model.eval()
