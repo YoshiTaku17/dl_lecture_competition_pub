@@ -1,4 +1,4 @@
-import os
+import os, sys
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -13,18 +13,13 @@ from src.datasets import ThingsMEGDataset
 from src.models import BasicConvClassifier
 from src.utils import set_seed
 
-
 @hydra.main(version_base=None, config_path="configs", config_name="config")
 def run(args: DictConfig):
     set_seed(args.seed)
     logdir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
     
     if args.use_wandb:
-        try:
-            wandb.init(mode="online", dir=logdir, project="MEG-classification")
-        except wandb.errors.CommError:
-            print("W&B initialization failed. Running in offline mode.")
-            wandb.init(mode="offline", dir=logdir, project="MEG-classification")
+        wandb.init(mode="online", dir=logdir, project="MEG-classification")
 
     # ------------------
     #    Dataloader
@@ -44,13 +39,13 @@ def run(args: DictConfig):
     #       Model
     # ------------------
     model = BasicConvClassifier(
-        train_set.num_classes, train_set.seq_len, train_set.num_channels
+        train_set.num_classes, train_set.seq_len, train_set.num_channels, dropout_rate=args.dropout_rate
     ).to(args.device)
 
     # ------------------
     #     Optimizer
     # ------------------
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
     # ------------------
     #   Start training
@@ -66,7 +61,7 @@ def run(args: DictConfig):
         train_loss, train_acc, val_loss, val_acc = [], [], [], []
         
         model.train()
-        for X, y, subject_idxs in tqdm(train_loader, desc="Train"):
+        for X, y in tqdm(train_loader, desc="Train"):  # 修正: subject_idxsを削除
             X, y = X.to(args.device), y.to(args.device)
 
             y_pred = model(X)
@@ -82,7 +77,7 @@ def run(args: DictConfig):
             train_acc.append(acc.item())
 
         model.eval()
-        for X, y, subject_idxs in tqdm(val_loader, desc="Validation"):
+        for X, y in tqdm(val_loader, desc="Validation"):  # 修正: subject_idxsを削除
             X, y = X.to(args.device), y.to(args.device)
             
             with torch.no_grad():
@@ -109,7 +104,7 @@ def run(args: DictConfig):
 
     preds = [] 
     model.eval()
-    for X, subject_idxs in tqdm(test_loader, desc="Validation"):        
+    for X in tqdm(test_loader, desc="Validation"):  # 修正: subject_idxsを削除
         preds.append(model(X.to(args.device)).detach().cpu())
         
     preds = torch.cat(preds, dim=0).numpy()
