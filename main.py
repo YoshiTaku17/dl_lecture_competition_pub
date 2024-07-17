@@ -13,7 +13,7 @@ from src.datasets import ThingsMEGDataset
 from src.models import BasicConvClassifier
 from src.utils import set_seed
 
-@hydra.main(version_base=None, config_path="configs", config_name="config")
+@hydra.main(version_base=None, config_path="assets/config", config_name="config")
 def run(args: DictConfig):
     set_seed(args.seed)
     logdir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
