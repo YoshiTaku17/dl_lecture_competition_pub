@@ -7,10 +7,10 @@ class ThingsMEGDataset(Dataset):
     def __init__(self, split: str, data_dir: str) -> None:
         self.split = split
         self.data_dir = data_dir
-        self.X = torch.load(os.path.join(data_dir, f"{split}_X.pt"))
-        self.y = torch.load(os.path.join(data_dir, f"{split}_y.pt"))
+        self.X = torch.tensor(np.load(os.path.join(data_dir, f"{split}_X.npy")), dtype=torch.float32)
+        self.y = torch.tensor(np.load(os.path.join(data_dir, f"{split}_y.npy")), dtype=torch.long)
 
-        # スケーリング
+        # スケーリング（標準化）
         self.X = (self.X - self.X.mean(dim=0)) / self.X.std(dim=0)
 
         # ベースライン補正
