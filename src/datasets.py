@@ -4,7 +4,7 @@ import torch
 from torch.utils.data import Dataset
 
 class ThingsMEGDataset(Dataset):
-    def __init__(self, split: str, data_dir: str, args) -> None:
+    def __init__(self, split: str, data_dir: str) -> None:
         self.split = split
         self.data_dir = data_dir
         self.X = torch.load(os.path.join(data_dir, f"{split}_X.pt"))
@@ -26,4 +26,3 @@ class ThingsMEGDataset(Dataset):
 
     def __getitem__(self, idx: int):
         return self.X[idx], self.y[idx]
-
