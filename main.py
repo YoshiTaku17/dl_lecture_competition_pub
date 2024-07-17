@@ -8,14 +8,25 @@ from omegaconf import DictConfig
 import wandb
 from termcolor import cprint
 from tqdm import tqdm
+import mne
 
 from src.datasets import ThingsMEGDataset
 from src.models import BasicConvClassifier
 from src.utils import set_seed
 
-def preprocess_eeg(data):
+def preprocess_eeg(data, sfreq):
+    # リサンプリング
+    data = mne.filter.resample(data, up=1, down=2, npad="auto")
+
+    # フィルタリング
+    data = mne.filter.filter_data(data, sfreq // 2, l_freq=1, h_freq=40)
+
+    # ベースライン補正
+    data -= np.mean(data, axis=-1, keepdims=True)
+
     # スケーリング（正規化）
     data = (data - np.mean(data, axis=-1, keepdims=True)) / np.std(data, axis=-1, keepdims=True)
+    
     return data.astype(np.float32)
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
@@ -73,7 +84,7 @@ def run(args: DictConfig):
             X, y = X.to(device), y.to(device)
 
             # 前処理を適用
-            X = preprocess_eeg(X.cpu().numpy())
+            X = preprocess_eeg(X.cpu().numpy(), sfreq=250)
             X = torch.tensor(X).to(device)
 
             y_pred = model(X)
@@ -93,7 +104,7 @@ def run(args: DictConfig):
             X, y = X.to(device), y.to(device)
 
             # 前処理を適用
-            X = preprocess_eeg(X.cpu().numpy())
+            X = preprocess_eeg(X.cpu().numpy(), sfreq=250)
             X = torch.tensor(X).to(device)
             
             with torch.no_grad():
@@ -121,15 +132,10 @@ def run(args: DictConfig):
     model.eval()
     for X, subject_idxs in tqdm(test_loader, desc="Validation"):  
         # 前処理を適用
-        X = preprocess_eeg(X.cpu().numpy())
+        X = preprocess_eeg(X.cpu().numpy(), sfreq=250)
         X = torch.tensor(X).to(device)
       
         preds.append(model(X).detach().cpu())
         
     preds = torch.cat(preds, dim=0).numpy()
-    np.save(os.path.join(logdir, "submission"), preds)
-    cprint(f"Submission {preds.shape} saved at {logdir}", "cyan")
-
-
-if __name__ == "__main__":
-    run()
+    np.save
