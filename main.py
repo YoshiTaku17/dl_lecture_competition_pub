@@ -16,6 +16,9 @@ from src.utils import set_seed
 
 
 def preprocess_eeg(data, sfreq):
+    # データ型をfloat64に変換
+    data = data.astype(np.float64)
+
     # リサンプリング
     data = mne.filter.resample(data, up=1, down=2, npad="auto")
 
@@ -35,10 +38,10 @@ def preprocess_eeg(data, sfreq):
 def run(args: DictConfig):
     set_seed(args.seed)
     logdir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
-
+    
     if args.use_wandb:
         wandb.init(mode="online", dir=logdir, project="MEG-classification")
-
+    
     # デバイスの設定をCPUに変更
     device = torch.device("cpu")
 
@@ -47,12 +50,12 @@ def run(args: DictConfig):
         # ノイズの追加
         noise = torch.randn_like(X) * 0.1
         return X + noise
-
+    
     # ------------------
     #    Dataloader
     # ------------------
     loader_args = {"batch_size": args.batch_size, "num_workers": args.num_workers}
-
+    
     train_set = ThingsMEGDataset("train", args.data_dir)
     train_loader = torch.utils.data.DataLoader(train_set, shuffle=True, **loader_args)
     val_set = ThingsMEGDataset("val", args.data_dir)
@@ -72,22 +75,21 @@ def run(args: DictConfig):
     # ------------------
     #     Optimizer
     # ------------------
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-4)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     # ------------------
     #   Start training
-    # ------------------
+    # ------------------  
     max_val_acc = 0
     accuracy = Accuracy(
         task="multiclass", num_classes=train_set.num_classes, top_k=10
     ).to(device)
-
+      
     for epoch in range(args.epochs):
         print(f"Epoch {epoch+1}/{args.epochs}")
-
+        
         train_loss, train_acc, val_loss, val_acc = [], [], [], []
-
+        
         model.train()
         for X, y, subject_idxs in tqdm(train_loader, desc="Train"):
             X, y = X.to(device), y.to(device)
@@ -102,24 +104,24 @@ def run(args: DictConfig):
             X = torch.tensor(X).to(device)
 
             y_pred = model(X)
-
+            
             loss = F.cross_entropy(y_pred, y)
             train_loss.append(loss.item())
-
+            
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-
+            
             acc = accuracy(y_pred, y)
             train_acc.append(acc.item())
 
         model.eval()
         for X, y, subject_idxs in tqdm(val_loader, desc="Validation"):
             X, y = X.to(device), y.to(device)
-
+            
             with torch.no_grad():
                 y_pred = model(X)
-
+            
             val_loss.append(F.cross_entropy(y_pred, y).item())
             val_acc.append(accuracy(y_pred, y).item())
 
@@ -132,19 +134,17 @@ def run(args: DictConfig):
             cprint("New best.", "cyan")
             torch.save(model.state_dict(), os.path.join(logdir, "model_best.pt"))
             max_val_acc = np.mean(val_acc)
-
-        scheduler.step()
-
+    
     # ----------------------------------
     #  Start evaluation with best model
     # ----------------------------------
     model.load_state_dict(torch.load(os.path.join(logdir, "model_best.pt"), map_location=device))
 
-    preds = []
+    preds = [] 
     model.eval()
-    for X, subject_idxs in tqdm(test_loader, desc="Validation"):
+    for X, subject_idxs in tqdm(test_loader, desc="Validation"):        
         preds.append(model(X.to(device)).detach().cpu())
-
+        
     preds = torch.cat(preds, dim=0).numpy()
     np.save(os.path.join(logdir, "submission"), preds)
     cprint(f"Submission {preds.shape} saved at {logdir}", "cyan")
