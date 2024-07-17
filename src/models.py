@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from einops.layers.torch import Rearrange
 
 class BasicConvClassifier(nn.Module):
     def __init__(
@@ -9,8 +10,7 @@ class BasicConvClassifier(nn.Module):
         seq_len: int,
         in_channels: int,
         hid_dim: int = 128,
-        dropout_rate: float = 0.5,  # ドロップアウト率を追加
-        weight_decay: float = 1e-4  # 正則化のためのウェイト減衰を追加
+        dropout_rate: float = 0.5  # dropout_rateを追加
     ) -> None:
         super().__init__()
 
@@ -21,7 +21,7 @@ class BasicConvClassifier(nn.Module):
 
         self.head = nn.Sequential(
             nn.AdaptiveAvgPool1d(1),
-            nn.Flatten(),
+            Rearrange("b d 1 -> b d"),
             nn.Linear(hid_dim, num_classes),
             nn.Dropout(dropout_rate)  # 出力層にドロップアウトを追加
         )
@@ -35,7 +35,7 @@ class ConvBlock(nn.Module):
         self,
         in_dim,
         out_dim,
-        dropout_rate: float,  # ドロップアウト率を追加
+        dropout_rate: float,  # dropout_rateを追加
         kernel_size: int = 3,
         p_drop: float = 0.1,
     ) -> None:
