@@ -138,4 +138,9 @@ def run(args: DictConfig):
         preds.append(model(X).detach().cpu())
         
     preds = torch.cat(preds, dim=0).numpy()
-    np.save
+    np.save(os.path.join(logdir, "submission"), preds)
+    cprint(f"Submission {preds.shape} saved at {logdir}", "cyan")
+
+
+if __name__ == "__main__":
+    run()
