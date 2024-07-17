@@ -1,4 +1,4 @@
-batch_size: 64
+batch_size: 128
 #batch_size: 128
 epochs: 20
 #epochs: 80
@@ -22,8 +22,8 @@ dropout_rate: 0.5
 #early_stopping_patience: 10
 weight_decay: 1e-4  # L2正則化のパラメータを追加
 
-defaults:
-  - _self_
+#defaults:
+#  - _self_
 
 
 
