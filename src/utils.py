@@ -1,51 +1,52 @@
 import torch
 
-def set_seed(seed):
+def set_seed(seed: int):
     torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
 
-def train_one_epoch(model, dataloader, criterion, optimizer, device):
+def train_one_epoch(model, data_loader, criterion, optimizer, device):
     model.train()
     running_loss = 0.0
     correct = 0
     total = 0
 
-    for X, y in dataloader:
-        X, y = X.to(device), y.to(device)
+    for inputs, labels in data_loader:
+        inputs, labels = inputs.to(device), labels.to(device)
+
         optimizer.zero_grad()
-        outputs = model(X)
-        loss = criterion(outputs, y)
+        outputs = model(inputs)
+        loss = criterion(outputs, labels)
         loss.backward()
         optimizer.step()
 
         running_loss += loss.item()
-        _, predicted = torch.max(outputs.data, 1)
-        total += y.size(0)
-        correct += (predicted == y).sum().item()
+        _, predicted = outputs.max(1)
+        total += labels.size(0)
+        correct += predicted.eq(labels).sum().item()
 
-    epoch_loss = running_loss / len(dataloader)
+    epoch_loss = running_loss / len(data_loader)
     epoch_acc = correct / total
     return epoch_loss, epoch_acc
 
-def validate(model, dataloader, criterion, device):
+def validate(model, data_loader, criterion, device):
     model.eval()
     running_loss = 0.0
     correct = 0
     total = 0
 
     with torch.no_grad():
-        for X, y in dataloader:
-            X, y = X.to(device), y.to(device)
-            outputs = model(X)
-            loss = criterion(outputs, y)
+        for inputs, labels in data_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
+
+            outputs = model(inputs)
+            loss = criterion(outputs, labels)
 
             running_loss += loss.item()
-            _, predicted = torch.max(outputs.data, 1)
-            total += y.size(0)
-            correct += (predicted == y).sum().item()
+            _, predicted = outputs.max(1)
+            total += labels.size(0)
+            correct += predicted.eq(labels).sum().item()
 
-    epoch_loss = running_loss / len(dataloader)
+    epoch_loss = running_loss / len(data_loader)
     epoch_acc = correct / total
     return epoch_loss, epoch_acc
