@@ -1,11 +1,13 @@
-import hydra
-from omegaconf import DictConfig
+import os
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
+import hydra
+from omegaconf import DictConfig
 import wandb
+
 from src.datasets import ThingsMEGDataset
-from src.models import CLIPPretrainedModel
+from src.models import BasicConvClassifier
 from src.utils import set_seed, train_one_epoch, validate
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
@@ -17,13 +19,19 @@ def run(args: DictConfig):
         wandb.init(project="MEG-classification", config=args)
 
     # Dataset and DataLoader
-    train_set = ThingsMEGDataset("train", args.data_dir)
-    val_set = ThingsMEGDataset("val", args.data_dir)
+    train_set = ThingsMEGDataset("train", args.data_dir, args)
+    val_set = ThingsMEGDataset("val", args.data_dir, args)
     train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
     val_loader = DataLoader(val_set, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
 
     # Model
-    model = CLIPPretrainedModel(num_classes=40, seq_len=512, in_channels=306, dropout_rate=args.dropout_rate).to(args.device)
+    model = BasicConvClassifier(
+        num_classes=train_set.num_classes,
+        seq_len=train_set.seq_len,
+        in_channels=train_set.num_channels,
+        dropout_rate=args.dropout_rate
+    ).to(args.device)
+
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     criterion = torch.nn.CrossEntropyLoss()
 
