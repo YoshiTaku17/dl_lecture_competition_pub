@@ -8,18 +8,12 @@ from omegaconf import DictConfig
 import wandb
 from termcolor import cprint
 from tqdm import tqdm
-import mne
 
 from src.datasets import ThingsMEGDataset
 from src.models import BasicConvClassifier
 from src.utils import set_seed
 
-def preprocess_eeg(data, sfreq=250):
-    data = data.astype(np.float64)
-    # リサンプリング
-    data = mne.filter.resample(data, up=1, down=2, npad="auto")
-    # バンドパスフィルタリング
-    data = mne.filter.filter_data(data, sfreq, l_freq=1, h_freq=40)
+def preprocess_eeg(data):
     # スケーリング（正規化）
     data = (data - np.mean(data, axis=-1, keepdims=True)) / np.std(data, axis=-1, keepdims=True)
     return data.astype(np.float32)
@@ -79,7 +73,7 @@ def run(args: DictConfig):
             X, y = X.to(device), y.to(device)
 
             # 前処理を適用
-            X = preprocess_eeg(X.cpu().numpy(), sfreq=250)
+            X = preprocess_eeg(X.cpu().numpy())
             X = torch.tensor(X).to(device)
 
             y_pred = model(X)
@@ -99,7 +93,7 @@ def run(args: DictConfig):
             X, y = X.to(device), y.to(device)
 
             # 前処理を適用
-            X = preprocess_eeg(X.cpu().numpy(), sfreq=250)
+            X = preprocess_eeg(X.cpu().numpy())
             X = torch.tensor(X).to(device)
             
             with torch.no_grad():
@@ -127,7 +121,7 @@ def run(args: DictConfig):
     model.eval()
     for X, subject_idxs in tqdm(test_loader, desc="Validation"):  
         # 前処理を適用
-        X = preprocess_eeg(X.cpu().numpy(), sfreq=250)
+        X = preprocess_eeg(X.cpu().numpy())
         X = torch.tensor(X).to(device)
       
         preds.append(model(X).detach().cpu())
