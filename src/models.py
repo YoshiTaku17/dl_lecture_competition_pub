@@ -1,30 +1,66 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
-class SimpleEEGNet(nn.Module):
-    def __init__(self, num_classes: int, seq_len: int, in_channels: int, dropout_rate: float = 0.5):
-        super(SimpleEEGNet, self).__init__()
-        self.num_classes = num_classes
-        self.seq_len = seq_len
-        self.in_channels = in_channels
-        self.dropout_rate = dropout_rate
+class BasicConvClassifier(nn.Module):
+    def __init__(
+        self,
+        num_classes: int,
+        seq_len: int,
+        in_channels: int,
+        hid_dim: int = 128,
+        dropout_rate: float = 0.5,  # ドロップアウト率を追加
+        weight_decay: float = 1e-4  # 正則化のためのウェイト減衰を追加
+    ) -> None:
+        super().__init__()
 
-        self.conv1 = nn.Conv2d(1, 16, kernel_size=(1, 51), stride=(1, 1), padding=(0, 25), bias=False)
-        self.batchnorm1 = nn.BatchNorm2d(16, False)
-        self.conv2 = nn.Conv2d(16, 4, kernel_size=(in_channels, 1), stride=(1, 1), padding=(0, 0), bias=False)
-        self.batchnorm2 = nn.BatchNorm2d(4, False)
-        self.pooling = nn.AvgPool2d(kernel_size=(1, 4), stride=(1, 4))
-        self.dropout = nn.Dropout(p=dropout_rate)
-        self.fc1 = nn.Linear(4 * seq_len // 4, num_classes, bias=False)
-        self.batchnorm3 = nn.BatchNorm1d(num_classes, False)
+        self.blocks = nn.Sequential(
+            ConvBlock(in_channels, hid_dim, dropout_rate),
+            ConvBlock(hid_dim, hid_dim, dropout_rate),
+        )
 
-    def forward(self, x):
-        x = x.unsqueeze(1)  # Add a channel dimension
-        x = torch.relu(self.batchnorm1(self.conv1(x)))
-        x = torch.relu(self.batchnorm2(self.conv2(x)))
-        x = self.pooling(x)
-        x = self.dropout(x)
-        x = x.view(x.size(0), -1)
-        x = self.fc1(x)
-        x = self.batchnorm3(x)
-        return x
+        self.head = nn.Sequential(
+            nn.AdaptiveAvgPool1d(1),
+            nn.Flatten(),
+            nn.Linear(hid_dim, num_classes),
+            nn.Dropout(dropout_rate)  # 出力層にドロップアウトを追加
+        )
+
+    def forward(self, X: torch.Tensor) -> torch.Tensor:
+        X = self.blocks(X)
+        return self.head(X)
+
+class ConvBlock(nn.Module):
+    def __init__(
+        self,
+        in_dim,
+        out_dim,
+        dropout_rate: float,  # ドロップアウト率を追加
+        kernel_size: int = 3,
+        p_drop: float = 0.1,
+    ) -> None:
+        super().__init__()
+
+        self.in_dim = in_dim
+        self.out_dim = out_dim
+
+        self.conv0 = nn.Conv1d(in_dim, out_dim, kernel_size, padding="same")
+        self.conv1 = nn.Conv1d(out_dim, out_dim, kernel_size, padding="same")
+
+        self.batchnorm0 = nn.BatchNorm1d(num_features=out_dim)
+        self.batchnorm1 = nn.BatchNorm1d(num_features=out_dim)
+
+        self.dropout = nn.Dropout(p_drop)
+
+    def forward(self, X: torch.Tensor) -> torch.Tensor:
+        if self.in_dim == self.out_dim:
+            X = self.conv0(X) + X  # skip connection
+        else:
+            X = self.conv0(X)
+
+        X = F.gelu(self.batchnorm0(X))
+
+        X = self.conv1(X) + X  # skip connection
+        X = F.gelu(self.batchnorm1(X))
+
+        return self.dropout(X)
