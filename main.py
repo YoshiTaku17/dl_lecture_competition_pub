@@ -1,3 +1,4 @@
+import os
 import hydra
 from omegaconf import DictConfig
 import torch
@@ -23,7 +24,7 @@ def run(args: DictConfig):
     val_loader = DataLoader(val_set, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
 
     # Model
-    model = SimpleEEGNet(num_classes=40, dropout_rate=args.dropout_rate).to(args.device)
+    model = SimpleEEGNet(num_classes=40, seq_len=512, in_channels=306, dropout_rate=args.dropout_rate).to(args.device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     criterion = torch.nn.CrossEntropyLoss()
 
