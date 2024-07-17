@@ -10,7 +10,7 @@ class BasicConvClassifier(nn.Module):
         seq_len: int,
         in_channels: int,
         hid_dim: int = 128,
-        dropout_rate: float = 0.5  # dropout_rateを追加
+        dropout_rate: float = 0.5  # ドロップアウト率を追加
     ) -> None:
         super().__init__()
 
@@ -35,7 +35,7 @@ class ConvBlock(nn.Module):
         self,
         in_dim,
         out_dim,
-        dropout_rate: float,  # dropout_rateを追加
+        dropout_rate: float,  # ドロップアウト率を追加
         kernel_size: int = 3,
         p_drop: float = 0.1,
     ) -> None:
@@ -50,7 +50,7 @@ class ConvBlock(nn.Module):
         self.batchnorm0 = nn.BatchNorm1d(num_features=out_dim)
         self.batchnorm1 = nn.BatchNorm1d(num_features=out_dim)
 
-        self.dropout = nn.Dropout(p_drop)
+        self.dropout = nn.Dropout(dropout_rate)
 
     def forward(self, X: torch.Tensor) -> torch.Tensor:
         if self.in_dim == self.out_dim:
