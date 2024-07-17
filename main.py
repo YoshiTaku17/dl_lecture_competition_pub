@@ -8,31 +8,21 @@ from omegaconf import DictConfig
 import wandb
 from termcolor import cprint
 from tqdm import tqdm
-import mne  # 脳波データの前処理に使用
+import mne
 
 from src.datasets import ThingsMEGDataset
 from src.models import BasicConvClassifier
 from src.utils import set_seed
 
-
-def preprocess_eeg(data, sfreq):
-    # データ型をfloat64に変換
+def preprocess_eeg(data, sfreq=250):
     data = data.astype(np.float64)
-
     # リサンプリング
     data = mne.filter.resample(data, up=1, down=2, npad="auto")
-
-    # フィルタリング（バンドパスフィルタ）
+    # バンドパスフィルタリング
     data = mne.filter.filter_data(data, sfreq, l_freq=1, h_freq=40)
-
-    # スケーリング
-    data = data / np.max(np.abs(data))
-
-    # ベースライン補正
-    data = data - np.mean(data, axis=1, keepdims=True)
-
-    return data
-
+    # スケーリング（正規化）
+    data = (data - np.mean(data, axis=-1, keepdims=True)) / np.std(data, axis=-1, keepdims=True)
+    return data.astype(np.float32)
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
 def run(args: DictConfig):
@@ -45,12 +35,6 @@ def run(args: DictConfig):
     # デバイスの設定をCPUに変更
     device = torch.device("cpu")
 
-    # データ拡張の設定
-    def augment_data(X):
-        # ノイズの追加
-        noise = torch.randn_like(X) * 0.1
-        return X + noise
-    
     # ------------------
     #    Dataloader
     # ------------------
@@ -94,13 +78,8 @@ def run(args: DictConfig):
         for X, y, subject_idxs in tqdm(train_loader, desc="Train"):
             X, y = X.to(device), y.to(device)
 
-            # データ拡張を適用
-            X = augment_data(X)
-
-            # 脳波の前処理を適用
-            X = preprocess_eeg(X.cpu().numpy(), sfreq=250)  # sfreqはサンプリング周波数
-
-            # 再びテンソルに変換
+            # 前処理を適用
+            X = preprocess_eeg(X.cpu().numpy(), sfreq=250)
             X = torch.tensor(X).to(device)
 
             y_pred = model(X)
@@ -118,6 +97,10 @@ def run(args: DictConfig):
         model.eval()
         for X, y, subject_idxs in tqdm(val_loader, desc="Validation"):
             X, y = X.to(device), y.to(device)
+
+            # 前処理を適用
+            X = preprocess_eeg(X.cpu().numpy(), sfreq=250)
+            X = torch.tensor(X).to(device)
             
             with torch.no_grad():
                 y_pred = model(X)
@@ -142,8 +125,12 @@ def run(args: DictConfig):
 
     preds = [] 
     model.eval()
-    for X, subject_idxs in tqdm(test_loader, desc="Validation"):        
-        preds.append(model(X.to(device)).detach().cpu())
+    for X, subject_idxs in tqdm(test_loader, desc="Validation"):  
+        # 前処理を適用
+        X = preprocess_eeg(X.cpu().numpy(), sfreq=250)
+        X = torch.tensor(X).to(device)
+      
+        preds.append(model(X).detach().cpu())
         
     preds = torch.cat(preds, dim=0).numpy()
     np.save(os.path.join(logdir, "submission"), preds)
