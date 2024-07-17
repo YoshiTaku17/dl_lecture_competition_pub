@@ -8,26 +8,10 @@ from omegaconf import DictConfig
 import wandb
 from termcolor import cprint
 from tqdm import tqdm
-import mne
 
 from src.datasets import ThingsMEGDataset
 from src.models import BasicConvClassifier
 from src.utils import set_seed
-
-def preprocess_eeg(data, sfreq):
-    # リサンプリング
-    data = mne.filter.resample(data, up=1, down=2, npad="auto")
-
-    # フィルタリング
-    data = mne.filter.filter_data(data, sfreq // 2, l_freq=1, h_freq=40)
-
-    # ベースライン補正
-    data -= np.mean(data, axis=-1, keepdims=True)
-
-    # スケーリング（正規化）
-    data = (data - np.mean(data, axis=-1, keepdims=True)) / np.std(data, axis=-1, keepdims=True)
-    
-    return data.astype(np.float32)
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
 def run(args: DictConfig):
@@ -46,13 +30,12 @@ def run(args: DictConfig):
     loader_args = {"batch_size": args.batch_size, "num_workers": args.num_workers}
     
     train_set = ThingsMEGDataset("train", args.data_dir)
-    train_loader = torch.utils.data.DataLoader(train_set, shuffle=True, **loader_args)
     val_set = ThingsMEGDataset("val", args.data_dir)
-    val_loader = torch.utils.data.DataLoader(val_set, shuffle=False, **loader_args)
     test_set = ThingsMEGDataset("test", args.data_dir)
-    test_loader = torch.utils.data.DataLoader(
-        test_set, shuffle=False, batch_size=args.batch_size, num_workers=args.num_workers
-    )
+
+    train_loader = torch.utils.data.DataLoader(train_set, shuffle=True, **loader_args)
+    val_loader = torch.utils.data.DataLoader(val_set, shuffle=False, **loader_args)
+    test_loader = torch.utils.data.DataLoader(test_set, shuffle=False, **loader_args)
 
     # ------------------
     #       Model
@@ -64,7 +47,7 @@ def run(args: DictConfig):
     # ------------------
     #     Optimizer
     # ------------------
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-4)  # weight_decayを追加
 
     # ------------------
     #   Start training
@@ -83,10 +66,6 @@ def run(args: DictConfig):
         for X, y, subject_idxs in tqdm(train_loader, desc="Train"):
             X, y = X.to(device), y.to(device)
 
-            # 前処理を適用
-            X = preprocess_eeg(X.cpu().numpy(), sfreq=250)
-            X = torch.tensor(X).to(device)
-
             y_pred = model(X)
             
             loss = F.cross_entropy(y_pred, y)
@@ -102,10 +81,6 @@ def run(args: DictConfig):
         model.eval()
         for X, y, subject_idxs in tqdm(val_loader, desc="Validation"):
             X, y = X.to(device), y.to(device)
-
-            # 前処理を適用
-            X = preprocess_eeg(X.cpu().numpy(), sfreq=250)
-            X = torch.tensor(X).to(device)
             
             with torch.no_grad():
                 y_pred = model(X)
@@ -130,12 +105,8 @@ def run(args: DictConfig):
 
     preds = [] 
     model.eval()
-    for X, subject_idxs in tqdm(test_loader, desc="Validation"):  
-        # 前処理を適用
-        X = preprocess_eeg(X.cpu().numpy(), sfreq=250)
-        X = torch.tensor(X).to(device)
-      
-        preds.append(model(X).detach().cpu())
+    for X, subject_idxs in tqdm(test_loader, desc="Validation"):        
+        preds.append(model(X.to(device)).detach().cpu())
         
     preds = torch.cat(preds, dim=0).numpy()
     np.save(os.path.join(logdir, "submission"), preds)
