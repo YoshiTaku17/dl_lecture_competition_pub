@@ -23,6 +23,8 @@ def run(args: DictConfig):
 
     # デバイスの設定
     # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # デバイスの設定
+    args.device = torch.device("cpu")  # ここを追加
 
     # ------------------
     #    Dataloader
