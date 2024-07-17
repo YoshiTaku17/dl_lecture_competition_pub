@@ -13,15 +13,22 @@ from src.datasets import ThingsMEGDataset
 from src.models import BasicConvClassifier
 from src.utils import set_seed
 
+
 @hydra.main(version_base=None, config_path="configs", config_name="config")
 def run(args: DictConfig):
     set_seed(args.seed)
     logdir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
     
     if args.use_wandb:
-        wandb.init(mode="online", dir=logdir, project="MEG-classification")
+        try:
+            wandb.init(mode="online", dir=logdir, project="MEG-classification")
+        except wandb.errors.CommError:
+            print("W&B initialization failed. Running in offline mode.")
+            wandb.init(mode="offline", dir=logdir, project="MEG-classification")
 
-    # Dataloader
+    # ------------------
+    #    Dataloader
+    # ------------------
     loader_args = {"batch_size": args.batch_size, "num_workers": args.num_workers}
     
     train_set = ThingsMEGDataset("train", args.data_dir)
@@ -33,15 +40,21 @@ def run(args: DictConfig):
         test_set, shuffle=False, batch_size=args.batch_size, num_workers=args.num_workers
     )
 
-    # Model
+    # ------------------
+    #       Model
+    # ------------------
     model = BasicConvClassifier(
-        train_set.num_classes, train_set.seq_len, train_set.num_channels, dropout_rate=args.dropout_rate
+        train_set.num_classes, train_set.seq_len, train_set.num_channels
     ).to(args.device)
 
-    # Optimizer
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    # ------------------
+    #     Optimizer
+    # ------------------
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
-    # Start training  
+    # ------------------
+    #   Start training
+    # ------------------  
     max_val_acc = 0
     accuracy = Accuracy(
         task="multiclass", num_classes=train_set.num_classes, top_k=10
@@ -53,7 +66,7 @@ def run(args: DictConfig):
         train_loss, train_acc, val_loss, val_acc = [], [], [], []
         
         model.train()
-        for X, y in tqdm(train_loader, desc="Train"):
+        for X, y, subject_idxs in tqdm(train_loader, desc="Train"):
             X, y = X.to(args.device), y.to(args.device)
 
             y_pred = model(X)
@@ -69,7 +82,7 @@ def run(args: DictConfig):
             train_acc.append(acc.item())
 
         model.eval()
-        for X, y in tqdm(val_loader, desc="Validation"):
+        for X, y, subject_idxs in tqdm(val_loader, desc="Validation"):
             X, y = X.to(args.device), y.to(args.device)
             
             with torch.no_grad():
@@ -88,17 +101,21 @@ def run(args: DictConfig):
             torch.save(model.state_dict(), os.path.join(logdir, "model_best.pt"))
             max_val_acc = np.mean(val_acc)
             
-    # Start evaluation with best model
+    
+    # ----------------------------------
+    #  Start evaluation with best model
+    # ----------------------------------
     model.load_state_dict(torch.load(os.path.join(logdir, "model_best.pt"), map_location=args.device))
 
     preds = [] 
     model.eval()
-    for X, _ in tqdm(test_loader, desc="Validation"):        
+    for X, subject_idxs in tqdm(test_loader, desc="Validation"):        
         preds.append(model(X.to(args.device)).detach().cpu())
         
     preds = torch.cat(preds, dim=0).numpy()
     np.save(os.path.join(logdir, "submission"), preds)
     cprint(f"Submission {preds.shape} saved at {logdir}", "cyan")
+
 
 if __name__ == "__main__":
     run()
