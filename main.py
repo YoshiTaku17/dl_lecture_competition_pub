@@ -20,9 +20,10 @@ def run(args: DictConfig):
     
     if args.use_wandb:
         wandb.init(mode="online", dir=logdir, project="MEG-classification")
-
+    # デバイスの設定をCPUに変更
+    device = torch.device("cpu")
     # デバイスの設定
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    #device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # デバイスの設定
     #args.device = torch.device("cpu")  # ここを追加
 
