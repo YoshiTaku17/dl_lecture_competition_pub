@@ -13,6 +13,7 @@ from src.datasets import ThingsMEGDataset
 from src.models import BasicConvClassifier
 from src.utils import set_seed
 
+
 @hydra.main(version_base=None, config_path="configs", config_name="config")
 def run(args: DictConfig):
     set_seed(args.seed)
@@ -20,12 +21,9 @@ def run(args: DictConfig):
     
     if args.use_wandb:
         wandb.init(mode="online", dir=logdir, project="MEG-classification")
+
     # デバイスの設定をCPUに変更
     device = torch.device("cpu")
-    # デバイスの設定
-    #device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # デバイスの設定
-    #args.device = torch.device("cpu")  # ここを追加
 
     # ------------------
     #    Dataloader
@@ -45,13 +43,13 @@ def run(args: DictConfig):
     #       Model
     # ------------------
     model = BasicConvClassifier(
-        train_set.num_classes, train_set.seq_len, train_set.num_channels, dropout_rate=args.dropout_rate
+        train_set.num_classes, train_set.seq_len, train_set.num_channels
     ).to(args.device)
 
     # ------------------
     #     Optimizer
     # ------------------
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     # ------------------
     #   Start training
@@ -95,12 +93,13 @@ def run(args: DictConfig):
         print(f"Epoch {epoch+1}/{args.epochs} | train loss: {np.mean(train_loss):.3f} | train acc: {np.mean(train_acc):.3f} | val loss: {np.mean(val_loss):.3f} | val acc: {np.mean(val_acc):.3f}")
         torch.save(model.state_dict(), os.path.join(logdir, "model_last.pt"))
         if args.use_wandb:
-            wandb.log({"train_loss": np.mean(train_loss), "train_acc": np.mean(train_acc), "val_loss": np.mean(val_loss), "val_acc": np.mean(val_acc), "top_10_accuracy": np.mean(val_acc)})
-
+            wandb.log({"train_loss": np.mean(train_loss), "train_acc": np.mean(train_acc), "val_loss": np.mean(val_loss), "val_acc": np.mean(val_acc)})
+        
         if np.mean(val_acc) > max_val_acc:
             cprint("New best.", "cyan")
             torch.save(model.state_dict(), os.path.join(logdir, "model_best.pt"))
             max_val_acc = np.mean(val_acc)
+            
     
     # ----------------------------------
     #  Start evaluation with best model
