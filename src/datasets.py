@@ -12,15 +12,21 @@ class ThingsMEGDataset(torch.utils.data.Dataset):
         self.split = split
         self.num_classes = 1854
         
-        self.X = torch.load(os.path.join(data_dir, f"{split}_X.pt"))
-        self.subject_idxs = torch.load(os.path.join(data_dir, f"{split}_subject_idxs.pt"))
+        self.X = self.load_npy_files(os.path.join(data_dir, f"{split}_X"))
+        self.subject_idxs = self.load_npy_files(os.path.join(data_dir, f"{split}_subject_idxs"))
         
         if split in ["train", "val"]:
-            self.y = torch.load(os.path.join(data_dir, f"{split}_y.pt"))
+            self.y = self.load_npy_files(os.path.join(data_dir, f"{split}_y"))
             assert len(torch.unique(self.y)) == self.num_classes, "Number of classes do not match."
         
         # 標準化を追加
         self.X = (self.X - self.X.mean(dim=0)) / self.X.std(dim=0)
+
+    def load_npy_files(self, dir_path):
+        npy_files = [os.path.join(dir_path, f) for f in os.listdir(dir_path) if f.endswith('.npy')]
+        npy_files.sort()  # Ensure the files are loaded in order
+        data = [np.load(f) for f in npy_files]
+        return torch.tensor(np.stack(data))
 
     def __len__(self) -> int:
         return len(self.X)
